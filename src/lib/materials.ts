@@ -4,11 +4,13 @@ import { supabase } from "./supabase";
 export const MATERIALS_BUCKET = "materials";
 
 /**
- * 允许上传的文件类型：PDF + 纯文本。
- * 当前模型（glm-4-flash）不支持视觉，图片会在预审阶段被拒绝。
+ * 允许上传的文件类型：PDF + 图片 + 纯文本。
+ * 图片走视觉模型 OCR 提取文字后预审，单张不超过 5MB。
  */
 const ACCEPTED_FILE_TYPES =
-  ".pdf,.txt,.md,.csv,.json,.log,text/*,application/json";
+  ".pdf,.txt,.md,.csv,.json,.log," +
+  ".jpg,.jpeg,.png,.webp,.bmp," +
+  "text/*,application/json,image/jpeg,image/png,image/webp,image/bmp,image/gif";
 
 /** 可直接提取文本的后缀白名单（与服务端 extract-material 保持一致） */
 const TEXT_FILE_EXTENSIONS = new Set([
@@ -20,8 +22,21 @@ const TEXT_FILE_EXTENSIONS = new Set([
   "text",
 ]);
 
+/** 图片后缀白名单（与服务端 extract-material 保持一致） */
+const IMAGE_FILE_EXTENSIONS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "gif",
+  "webp",
+  "bmp",
+]);
+
 /** 文件大小上限 10MB */
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+/** 图片文件大小上限 5MB（视觉模型限制） */
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 export { ACCEPTED_FILE_TYPES };
 
@@ -37,6 +52,12 @@ function isTextFile(file: File, ext: string): boolean {
   );
 }
 
+function isImageFile(file: File, ext: string): boolean {
+  return (
+    IMAGE_FILE_EXTENSIONS.has(ext) || file.type.startsWith("image/")
+  );
+}
+
 /** 校验文件类型与大小，不合法时抛出带中文提示的错误 */
 export function assertAcceptedFile(file: File): void {
   const dotIndex = file.name.lastIndexOf(".");
@@ -45,11 +66,16 @@ export function assertAcceptedFile(file: File): void {
       ? file.name.slice(dotIndex + 1).toLowerCase()
       : "";
 
-  if (!isPdfFile(file, ext) && !isTextFile(file, ext)) {
-    throw new Error("仅支持 PDF 或文本文件（TXT/MD/CSV/JSON/LOG），暂不支持图片");
+  if (!isPdfFile(file, ext) && !isTextFile(file, ext) && !isImageFile(file, ext)) {
+    throw new Error(
+      "仅支持 PDF、图片（JPG/PNG/WEBP/BMP）或文本文件（TXT/MD/CSV/JSON/LOG）"
+    );
   }
   if (file.size === 0) {
     throw new Error("文件内容为空，请重新选择");
+  }
+  if (isImageFile(file, ext) && file.size > MAX_IMAGE_SIZE) {
+    throw new Error("图片文件大小不能超过 5MB");
   }
   if (file.size > MAX_FILE_SIZE) {
     throw new Error("文件大小不能超过 10MB");
@@ -59,13 +85,18 @@ export function assertAcceptedFile(file: File): void {
 /** Storage 路径中允许的字符：仅字母、数字、连字符、下划线、点 */
 const STORAGE_SAFE_PATH_PATTERN = /^[A-Za-z0-9._-]+$/;
 
-/** 无后缀文件按 MIME 类型兜底推导后缀（仅覆盖 PDF 与常见文本类型） */
+/** 无后缀文件按 MIME 类型兜底推导后缀（覆盖 PDF、常见文本与图片类型） */
 const MIME_FALLBACK_EXTENSIONS: Record<string, string> = {
   "application/pdf": "pdf",
   "application/json": "json",
   "text/plain": "txt",
   "text/markdown": "md",
   "text/csv": "csv",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/bmp": "bmp",
 };
 
 /**

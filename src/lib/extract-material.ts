@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "./supabase-admin";
 import { MATERIALS_BUCKET } from "./materials";
+import { extractTextFromImage } from "./precheck-ai";
 
 /** 根据 document_id 查询 Storage 文件路径 */
 export async function getDocumentFilePath(
@@ -38,11 +39,21 @@ function getExtension(filePath: string): string {
   return dotIndex >= 0 ? filePath.slice(dotIndex + 1).toLowerCase() : "";
 }
 
+/** 图片后缀 → MIME 类型（blob.type 缺失时兜底） */
+const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+  bmp: "image/bmp",
+};
+
 /**
  * 从 Storage 下载材料并提取纯文本。
  * - PDF：pdf-parse（PDF.js）解析
+ * - 图片：视觉模型 OCR 提取文字
  * - 文本文件：直接按 UTF-8 读取
- * - 图片等其它类型：当前模型不支持视觉，抛出明确错误
  */
 export async function extractMaterialText(filePath: string): Promise<string> {
   const { data: blob, error } = await supabaseAdmin.storage
@@ -57,9 +68,13 @@ export async function extractMaterialText(filePath: string): Promise<string> {
   const mimeType = blob.type;
 
   if (ext === "pdf" || mimeType === "application/pdf") {
-    // 动态引入 + next.config 中标记 serverExternalPackages，
-    // 避免 pdf.js / @napi-rs/canvas 等 Node 原生依赖被打包进路由 bundle。
-    const { PDFParse } = await import("pdf-parse");
+    // 不用动态 import：Turbopack 对 serverExternalPackages 的运行时
+    // junction 机制在 Windows 上不稳定（断链/EPERM）。
+    // 改用 createRequire 让 Node 直接从项目 node_modules 解析，
+    // 完全绕开 [turbopack]_runtime 的外部模块加载。
+    const { createRequire } = await import("node:module");
+    const nodeRequire = createRequire(import.meta.url);
+    const { PDFParse } = nodeRequire("pdf-parse") as typeof import("pdf-parse");
     const parser = new PDFParse({
       data: new Uint8Array(await blob.arrayBuffer()),
     });
@@ -76,11 +91,13 @@ export async function extractMaterialText(filePath: string): Promise<string> {
     return (await blob.text()).trim();
   }
 
-  if (mimeType.startsWith("image/") || ["jpg", "jpeg", "png", "gif", "webp", "bmp"].includes(ext)) {
-    throw new Error(
-      "暂不支持图片材料的自动预审，请上传 PDF 或文本文件（图片识别能力即将上线）"
-    );
+  const imageMime =
+    IMAGE_MIME_BY_EXTENSION[ext] ??
+    (mimeType.startsWith("image/") ? mimeType : null);
+
+  if (imageMime) {
+    return extractTextFromImage(blob, imageMime);
   }
 
-  throw new Error("不支持的文件类型，请上传 PDF 或文本文件");
+  throw new Error("不支持的文件类型，请上传 PDF、图片或文本文件");
 }

@@ -9,6 +9,8 @@ import type { LanguageModelV4Middleware } from "@ai-sdk/provider";
 const apiKey = process.env.AI_API_KEY;
 const baseURL = process.env.AI_BASE_URL;
 const modelName = process.env.AI_MODEL ?? "glm-4-flash";
+// 视觉模型：用于从图片材料中 OCR 提取文字（glm-4v-flash 免费且兼容 OpenAI 格式）
+const visionModelName = process.env.AI_VISION_MODEL ?? "glm-4v-flash";
 
 if (!apiKey || !baseURL) {
   throw new Error(
@@ -54,3 +56,10 @@ export const precheckModel = wrapLanguageModel({
   model: openai.chat(modelName),
   middleware: zhipuJsonModeMiddleware,
 });
+
+/**
+ * 图片 OCR 使用的视觉模型。
+ * generateText 不下发 response_format，无需 json 兼容中间件，
+ * 直接走 Chat Completions 的多模态消息（image_url + base64 data URL）。
+ */
+export const visionModel = openai.chat(visionModelName);

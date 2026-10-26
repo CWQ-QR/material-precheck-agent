@@ -51,17 +51,35 @@ export function PendingReport() {
         </span>
       </span>
       <h2 className="mt-8 text-2xl font-bold tracking-tight text-slate-900">
-        AI 正在深度预审中，请稍候…
+        AI 正在深度比对材料与要求，请稍候...
       </h2>
-      <p className="mt-3 max-w-sm text-sm leading-6 text-slate-500">
-        正在逐项比对办事要求、排查材料缺漏与信息矛盾，通常需要数秒到数十秒，本页面会自动刷新结果。
+      <p className="mt-3 max-w-sm animate-pulse text-sm leading-6 text-slate-500">
+        正在逐项排查材料缺漏、信息矛盾与格式问题，通常需要数秒到数十秒，本页面会自动刷新结果。
       </p>
     </ReportShell>
   );
 }
 
+/**
+ * 将底层错误映射为用户可理解的提示。
+ * AI 服务断网/限流/超时等场景统一展示"AI 预审服务繁忙，请稍后重试"，
+ * 其余业务错误（如文件无法解析）保留原始信息。
+ */
+const BUSY_ERROR_PATTERN =
+  /繁忙|限流|rate|429|503|timeout|timed?\s*out|超时|econn|enet|socket\s*hang|fetch\s*failed|network|aborted|aborterror| overloaded/i;
+
+function friendlyErrorMessage(message: string): string {
+  return BUSY_ERROR_PATTERN.test(message)
+    ? "AI 预审服务繁忙，请稍后重试"
+    : message;
+}
+
 /** status === 'failed'：预审失败 */
 export function FailedReport({ errorMessage }: { errorMessage: string | null }) {
+  const message = errorMessage
+    ? friendlyErrorMessage(errorMessage)
+    : "预审过程中发生未知错误，请稍后重试。";
+
   return (
     <ReportShell>
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-red-600">
@@ -77,7 +95,7 @@ export function FailedReport({ errorMessage }: { errorMessage: string | null }) 
         预审失败
       </h2>
       <p className="mt-3 max-w-md rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
-        {errorMessage ?? "预审过程中发生未知错误，请稍后重试。"}
+        {message}
       </p>
       <Link
         href="/upload"

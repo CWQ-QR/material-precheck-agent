@@ -22,7 +22,7 @@ const STATUS_TEXT: Record<UploadStatus, string> = {
   idle: "上传并分析",
   uploading: "正在上传文件…",
   saving: "上传成功，正在创建预审任务…",
-  analyzing: "AI 正在深度预审，请稍候…",
+  analyzing: "AI 正在深度比对材料与要求...",
   error: "上传并分析",
 };
 
@@ -148,10 +148,14 @@ export function UploadForm() {
       // 第四步：跳转到报告页（pending 时页面会自动轮询）
       router.push(`/report/${documentId}`);
     } catch (error) {
+      const rawMessage =
+        error instanceof Error ? error.message : "处理失败，请稍后重试";
+      // 断网等网络层故障给出可理解的提示，避免暴露底层报错
+      const message = /fetch|network|econn|socket|load failed/i.test(rawMessage)
+        ? "网络连接异常，请检查网络后重试"
+        : rawMessage;
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? error.message : "处理失败，请稍后重试"
-      );
+      setErrorMessage(message);
     }
   };
 
@@ -182,7 +186,7 @@ export function UploadForm() {
             上传办事材料
           </h1>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            支持 PDF 或文本文件（TXT/MD/CSV/JSON/LOG，单文件不超过 10MB），上传后将自动进行预审分析。
+            支持 PDF、图片（JPG/PNG/WEBP/BMP，图片不超过 5MB）或文本文件（TXT/MD/CSV/JSON/LOG，不超过 10MB），上传后将自动进行预审分析。
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8">
@@ -248,7 +252,7 @@ export function UploadForm() {
                     点击选择文件
                   </span>
                   <span className="mt-1 block text-xs text-slate-500">
-                    支持 PDF 或文本文件，最大 10MB（暂不支持图片）
+                    支持 PDF、图片或文本文件，最大 10MB（图片 5MB）
                   </span>
                 </span>
               )}

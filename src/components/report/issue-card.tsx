@@ -77,12 +77,18 @@ export function IssueCard({
 
       <div className="mt-4 border-t border-slate-100 pt-4">
         {issue.source_quote ? (
-          <p className="text-xs leading-5 text-slate-400">
-            原文依据：{issue.source_quote}
-          </p>
+          <figure className="rounded-xl border-l-4 border-slate-300 bg-slate-50 px-4 py-3">
+            <figcaption className="text-xs font-medium text-slate-500">
+              原文依据
+            </figcaption>
+            <blockquote className="mt-1 text-sm leading-6 text-slate-600">
+              {issue.source_quote}
+            </blockquote>
+          </figure>
         ) : (
-          <p className="text-xs leading-5 text-amber-600/90">
-            ⚠️ 原文未提及，请人工核对
+          <p className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium leading-6 text-red-600">
+            <span aria-hidden>⚠️</span>
+            原文未提及，请人工核对
           </p>
         )}
       </div>

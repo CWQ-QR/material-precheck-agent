@@ -1,5 +1,5 @@
-import { generateObject } from "ai";
-import { precheckModel } from "./ai";
+import { generateObject, generateText } from "ai";
+import { precheckModel, visionModel } from "./ai";
 import {
   PRECHECK_SYSTEM_PROMPT,
   precheckResultSchema,
@@ -15,6 +15,13 @@ const MAX_ATTEMPTS = 2;
  * 需小于路由的 maxDuration。
  */
 const AI_CALL_TIMEOUT_MS = 60_000;
+
+/** 视觉模型单次提取允许的最大图片体积（glm-4v-flash 限制 base64 前约 5MB） */
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** 图片 OCR 指令：只要文字，不要解读 */
+const IMAGE_EXTRACT_PROMPT =
+  "请提取这张图片中的全部文字内容，保持原有排版格式输出，不要做任何总结或解释。";
 
 function buildPrompt(
   requirements: string,
@@ -82,4 +89,46 @@ export async function generatePrecheckObject(input: {
   throw lastError instanceof Error
     ? new Error(`AI 结果生成失败：${lastError.message}`)
     : new Error("AI 结果生成失败：未知错误");
+}
+
+/**
+ * 调用智谱视觉模型从图片材料中提取文字（OCR）。
+ * 图片转为 base64 data URL 以多模态消息传入，提取结果作为后续预审的 materialText。
+ */
+export async function extractTextFromImage(
+  blob: Blob,
+  mimeType: string
+): Promise<string> {
+  if (blob.size > MAX_IMAGE_BYTES) {
+    throw new Error("图片文件过大，请上传 5MB 以内的图片材料");
+  }
+  if (!mimeType.startsWith("image/")) {
+    throw new Error("文件不是有效的图片格式");
+  }
+
+  const buffer = new Uint8Array(await blob.arrayBuffer());
+  const dataUrl = `data:${mimeType};base64,${Buffer.from(buffer).toString("base64")}`;
+
+  try {
+    const { text } = await generateText({
+      model: visionModel,
+      temperature: 0,
+      maxRetries: 1,
+      abortSignal: AbortSignal.timeout(AI_CALL_TIMEOUT_MS),
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: IMAGE_EXTRACT_PROMPT },
+            { type: "image", image: dataUrl },
+          ],
+        },
+      ],
+    });
+    return text.trim();
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "未知错误";
+    throw new Error(`图片文字提取失败：${message}`);
+  }
 }
