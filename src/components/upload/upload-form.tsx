@@ -14,15 +14,27 @@ import {
   registerDocument,
   uploadMaterial,
 } from "@/lib/materials";
+import { createPendingReport } from "@/lib/reports";
 
-type UploadStatus = "idle" | "uploading" | "saving" | "error";
+type UploadStatus = "idle" | "uploading" | "saving" | "analyzing" | "error";
 
 const STATUS_TEXT: Record<UploadStatus, string> = {
   idle: "上传并分析",
   uploading: "正在上传文件…",
   saving: "上传成功，正在创建预审任务…",
+  analyzing: "AI 正在深度预审，请稍候…",
   error: "上传并分析",
 };
+
+const REQUIREMENTS_PLACEHOLDER =
+  "例如：需要身份证、申请表，日期必须在2026年以后";
+
+/**
+ * 预审接口客户端等待上限。
+ * 超时后不再阻塞页面：服务端会继续跑完并把 reports 置为 done/failed，
+ * 报告页轮询会拿到最终状态。
+ */
+const PRECHECK_REQUEST_TIMEOUT_MS = 120_000;
 
 function formatFileSize(size: number): string {
   if (size < 1024) return `${size} B`;
@@ -35,10 +47,15 @@ export function UploadForm() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
+  const [requirements, setRequirements] = useState("");
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const isProcessing = status === "uploading" || status === "saving";
+  const isProcessing =
+    status === "uploading" || status === "saving" || status === "analyzing";
+  const trimmedRequirements = requirements.trim();
+  const canSubmit =
+    !!file && trimmedRequirements.length > 0 && !isProcessing;
 
   const resetFileInput = () => {
     if (inputRef.current) {
@@ -74,24 +91,61 @@ export function UploadForm() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    // 防重复点击 / 空文件提交
-    if (isProcessing || !file) return;
+    // 防重复点击 / 缺文件或缺要求时拦截
+    if (!canSubmit) return;
 
     setErrorMessage(null);
+
+    let documentId: string | null = null;
 
     try {
       // 第一步：上传文件到 Storage 的 materials 桶
       setStatus("uploading");
-      const filePath = await uploadMaterial(file);
+      const filePath = await uploadMaterial(file as File);
 
-      // 第二步：向 documents 表插入记录，拿到 document_id
+      // 第二步：documents 表登记，同时创建 pending 的 reports 记录
       setStatus("saving");
-      const documentId = await registerDocument({
-        fileName: file.name,
+      documentId = await registerDocument({
+        fileName: (file as File).name,
         filePath,
       });
+      await createPendingReport(documentId);
 
-      // 第三步：跳转到报告页
+      // 第三步：调用后端预审接口（同步等待 AI 分析）。
+      // 加客户端超时，超时/网络异常不再留在本页报错——此时 pending 报告已建、
+      // 服务端会继续执行并回写状态，统一跳转报告页由轮询接管。
+      setStatus("analyzing");
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(
+        () => controller.abort(),
+        PRECHECK_REQUEST_TIMEOUT_MS
+      );
+      try {
+        const response = await fetch("/api/precheck", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            document_id: documentId,
+            requirements: trimmedRequirements,
+          }),
+          signal: controller.signal,
+        });
+
+        // 业务失败（如材料无法解析、AI 调用失败）时接口已把报告置为 failed，
+        // 仍跳转到报告页展示具体失败原因。
+        if (!response.ok) {
+          console.warn("预审接口返回失败:", await response.text());
+        }
+      } catch (error) {
+        console.warn(
+          "预审请求未正常完成（超时或网络异常），将跳转报告页继续等待:",
+          error instanceof Error ? error.message : error
+        );
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+
+      // 第四步：跳转到报告页（pending 时页面会自动轮询）
       router.push(`/report/${documentId}`);
     } catch (error) {
       setStatus("error");
@@ -128,10 +182,32 @@ export function UploadForm() {
             上传办事材料
           </h1>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            支持 PDF 或图片格式（单文件不超过 10MB），上传后将自动进行预审分析。
+            支持 PDF 或文本文件（TXT/MD/CSV/JSON/LOG，单文件不超过 10MB），上传后将自动进行预审分析。
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8">
+            {/* 办事要求 */}
+            <div>
+              <label
+                htmlFor="requirements"
+                className="mb-2 block text-sm font-semibold text-slate-700"
+              >
+                办事要求
+              </label>
+              <textarea
+                id="requirements"
+                name="requirements"
+                rows={3}
+                required
+                disabled={isProcessing}
+                value={requirements}
+                onChange={(e) => setRequirements(e.target.value)}
+                placeholder={REQUIREMENTS_PLACEHOLDER}
+                className="w-full resize-none rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm leading-6 text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60"
+              />
+            </div>
+
+            {/* 文件选择 */}
             <input
               ref={inputRef}
               type="file"
@@ -144,7 +220,7 @@ export function UploadForm() {
             />
             <label
               htmlFor="material-file-input"
-              className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
+              className={`mt-4 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
                 isProcessing
                   ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60"
                   : "border-slate-300 bg-slate-50/60 hover:border-indigo-400 hover:bg-indigo-50/40"
@@ -172,7 +248,7 @@ export function UploadForm() {
                     点击选择文件
                   </span>
                   <span className="mt-1 block text-xs text-slate-500">
-                    仅支持 PDF 和图片，最大 10MB
+                    支持 PDF 或文本文件，最大 10MB（暂不支持图片）
                   </span>
                 </span>
               )}
@@ -196,7 +272,7 @@ export function UploadForm() {
 
             <button
               type="submit"
-              disabled={!file || isProcessing}
+              disabled={!canSubmit}
               className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-base font-semibold text-white shadow-lg shadow-indigo-600/25 transition-all hover:shadow-xl hover:shadow-indigo-600/30 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-300 disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none"
             >
               {isProcessing && (
@@ -226,7 +302,9 @@ export function UploadForm() {
 
             {isProcessing && (
               <p className="mt-3 text-center text-xs text-slate-500">
-                请勿关闭页面或重复点击按钮…
+                {status === "analyzing"
+                  ? "AI 分析通常需要数秒到数十秒，请勿关闭页面或重复点击…"
+                  : "请勿关闭页面或重复点击按钮…"}
               </p>
             )}
           </form>

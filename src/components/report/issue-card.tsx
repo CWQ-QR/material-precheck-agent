@@ -17,6 +17,16 @@ const ISSUE_TYPE_META: Record<IssueType, IssueTypeMeta> = {
     badgeClass: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20",
     accentClass: "border-l-amber-400",
   },
+  format: {
+    label: "格式不符",
+    badgeClass: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-600/20",
+    accentClass: "border-l-sky-400",
+  },
+  ambiguous: {
+    label: "表述歧义",
+    badgeClass: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-600/20",
+    accentClass: "border-l-violet-400",
+  },
 };
 
 export function IssueCard({

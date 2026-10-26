@@ -3,21 +3,50 @@ import { supabase } from "./supabase";
 /** Storage 中存放办事材料的桶名 */
 export const MATERIALS_BUCKET = "materials";
 
-/** 允许上传的文件类型：PDF + 图片 */
-const ACCEPTED_FILE_TYPES = ".pdf,image/*";
+/**
+ * 允许上传的文件类型：PDF + 纯文本。
+ * 当前模型（glm-4-flash）不支持视觉，图片会在预审阶段被拒绝。
+ */
+const ACCEPTED_FILE_TYPES =
+  ".pdf,.txt,.md,.csv,.json,.log,text/*,application/json";
+
+/** 可直接提取文本的后缀白名单（与服务端 extract-material 保持一致） */
+const TEXT_FILE_EXTENSIONS = new Set([
+  "txt",
+  "md",
+  "csv",
+  "json",
+  "log",
+  "text",
+]);
 
 /** 文件大小上限 10MB */
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 export { ACCEPTED_FILE_TYPES };
 
+function isPdfFile(file: File, ext: string): boolean {
+  return ext === "pdf" || file.type === "application/pdf";
+}
+
+function isTextFile(file: File, ext: string): boolean {
+  return (
+    TEXT_FILE_EXTENSIONS.has(ext) ||
+    file.type.startsWith("text/") ||
+    file.type === "application/json"
+  );
+}
+
 /** 校验文件类型与大小，不合法时抛出带中文提示的错误 */
 export function assertAcceptedFile(file: File): void {
-  const isPdf = file.type === "application/pdf";
-  const isImage = file.type.startsWith("image/");
+  const dotIndex = file.name.lastIndexOf(".");
+  const ext =
+    dotIndex >= 0
+      ? file.name.slice(dotIndex + 1).toLowerCase()
+      : "";
 
-  if (!isPdf && !isImage) {
-    throw new Error("仅支持 PDF 或图片文件，请重新选择");
+  if (!isPdfFile(file, ext) && !isTextFile(file, ext)) {
+    throw new Error("仅支持 PDF 或文本文件（TXT/MD/CSV/JSON/LOG），暂不支持图片");
   }
   if (file.size === 0) {
     throw new Error("文件内容为空，请重新选择");
@@ -30,15 +59,13 @@ export function assertAcceptedFile(file: File): void {
 /** Storage 路径中允许的字符：仅字母、数字、连字符、下划线、点 */
 const STORAGE_SAFE_PATH_PATTERN = /^[A-Za-z0-9._-]+$/;
 
-/** 无后缀文件按 MIME 类型兜底推导后缀（仅覆盖 PDF 与常见图片） */
+/** 无后缀文件按 MIME 类型兜底推导后缀（仅覆盖 PDF 与常见文本类型） */
 const MIME_FALLBACK_EXTENSIONS: Record<string, string> = {
   "application/pdf": "pdf",
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/gif": "gif",
-  "image/webp": "webp",
-  "image/bmp": "bmp",
-  "image/tiff": "tiff",
+  "application/json": "json",
+  "text/plain": "txt",
+  "text/markdown": "md",
+  "text/csv": "csv",
 };
 
 /**

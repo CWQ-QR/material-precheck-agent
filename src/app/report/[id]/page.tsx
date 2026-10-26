@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { ReportView } from "@/components/report/report-view";
-import { getMockPrecheckResult } from "@/lib/mock-report";
+import { ReportPoller } from "@/components/report/report-poller";
+import { getReportSnapshotServer } from "@/lib/reports-server";
 
 export const metadata: Metadata = {
   title: "预审报告 - 材料一次过",
@@ -24,8 +24,10 @@ function ReportSkeleton() {
 }
 
 /**
- * 运行时数据访问（params / 未来的 AI 结果拉取）放在 Suspense 边界内，
- * 符合 Next.js 16 Cache Components 的流式渲染约定。
+ * 预审报告页。
+ * Next.js 16 中动态路由 params 为 Promise；DB 查询等运行时访问放在 Suspense 内。
+ * 服务端先用 service role 取一次初始快照（避免首屏闪烁），
+ * pending 时交给 ReportPoller 在浏览器端每 2 秒轮询。
  */
 async function ReportContent({
   params,
@@ -33,9 +35,9 @@ async function ReportContent({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const result = getMockPrecheckResult();
+  const initial = await getReportSnapshotServer(id);
 
-  return <ReportView documentId={id} result={result} />;
+  return <ReportPoller documentId={id} initial={initial} />;
 }
 
 export default function ReportPage({

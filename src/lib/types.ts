@@ -1,34 +1,34 @@
 /**
- * 全局共享类型定义
+ * 全局共享类型定义。
+ * 预审结果类型由 Zod Schema 推导，保证「AI 输出 ↔ 数据库 ↔ UI」类型闭环。
  */
+import type { PrecheckResult } from "./precheck-schema";
 
-/** 预审问题类型：missing=材料缺失，mismatch=信息矛盾/不一致 */
-export type IssueType = "missing" | "mismatch";
-
-/** 总体结论：pass=通过，conditional=条件通过，reject=不通过 */
-export type OverallStatus = "pass" | "conditional" | "reject";
-
-/** 单条预审问题 */
-export interface PrecheckIssue {
-  type: IssueType;
-  /** 问题描述 */
-  description: string;
-  /** 修改建议 */
-  suggestion: string;
-  /** 原文依据，材料中未提及时为 null */
-  source_quote: string | null;
-}
-
-/** 预审结果 */
-export interface PrecheckResult {
-  overall: OverallStatus;
-  issues: PrecheckIssue[];
-}
+export type {
+  PrecheckResult,
+  PrecheckIssue,
+  IssueType,
+  OverallStatus,
+} from "./precheck-schema";
 
 /** documents 表记录 */
 export interface DocumentRecord {
   id: string;
   file_name: string;
   file_path: string;
-  created_at?: string;
+  uploaded_at?: string;
+}
+
+/** reports 表状态 */
+export type ReportStatus = "pending" | "done" | "failed";
+
+/**
+ * 前端消费的报告快照（已把 result jsonb 解析成强类型）。
+ * null 表示该 document 尚无报告记录。
+ */
+export interface ReportSnapshot {
+  status: ReportStatus;
+  result: PrecheckResult | null;
+  /** 失败原因：status=failed 时存在（存储在 result.error_message 中） */
+  errorMessage: string | null;
 }
