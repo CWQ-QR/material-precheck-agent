@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { parsePartialJson } from "ai";
+import { AgentWorkflowPanel } from "./agent-workflow";
 import {
   precheckPartialResultSchema,
   precheckResultSchema,
@@ -278,7 +279,13 @@ export function StreamingReport({
           <span className="text-xs text-slate-400">文档编号：{documentId}</span>
         </div>
 
-        {/* AI 思考横幅 */}
+        {/* AI 思考横幅：首个数据块到达前显示 Agent 工作流面板，
+            数据开始真正返回后隐藏面板、切换为流式横幅并渐进展示结果 */}
+        {charCount === 0 ? (
+          <div className="mt-8">
+            <AgentWorkflowPanel />
+          </div>
+        ) : (
         <div className="mt-8 overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-violet-50 to-sky-50 shadow-sm">
           <div className="flex items-center justify-between gap-4 px-8 pt-7">
             <div className="flex items-center gap-3">
@@ -376,6 +383,7 @@ export function StreamingReport({
             ))}
           </ol>
         </div>
+        )}
 
         {/* 阶段性状态提示：已识别材料 / 初步结论（随流式数据到达逐个浮现） */}
         {(partial.document_type || overallText) && (

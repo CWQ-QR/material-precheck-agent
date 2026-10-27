@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { AgentWorkflowPanel } from "./agent-workflow";
 
 function ReportShell({ children }: { children: ReactNode }) {
   return (
@@ -26,34 +27,12 @@ function ReportShell({ children }: { children: ReactNode }) {
   );
 }
 
-/** status === 'pending'：AI 分析进行中 */
+/** status === 'pending'：AI 分析进行中（Agent 工作流面板，步骤逐个点亮） */
 export function PendingReport() {
   return (
     <ReportShell>
-      <span className="relative flex h-16 w-16">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-300 opacity-60" />
-        <span className="relative inline-flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-600/30">
-          <svg className="h-8 w-8 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-        </span>
-      </span>
-      <h2 className="mt-8 text-2xl font-bold tracking-tight text-slate-900">
-        AI 正在深度比对材料与要求，请稍候...
-      </h2>
-      <p className="mt-3 max-w-sm animate-pulse text-sm leading-6 text-slate-500">
+      <AgentWorkflowPanel />
+      <p className="mt-8 max-w-sm animate-pulse text-sm leading-6 text-slate-500">
         正在逐项排查材料缺漏、信息矛盾与格式问题，通常需要数秒到数十秒，本页面会自动刷新结果。
       </p>
     </ReportShell>
