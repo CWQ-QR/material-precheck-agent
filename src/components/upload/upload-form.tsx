@@ -16,6 +16,7 @@ import {
   uploadMaterial,
 } from "@/lib/materials";
 import { createPendingReport } from "@/lib/reports";
+import { addMyDocument } from "@/lib/user";
 import { saveRequirementsForStream } from "@/lib/stream-session";
 
 type UploadStatus = "idle" | "uploading" | "saving" | "error";
@@ -139,6 +140,9 @@ export function UploadForm() {
         filePath,
       });
       await createPendingReport(documentId);
+
+      // 登记到本设备的上传历史（工作台按此过滤，实现设备级数据隔离）
+      addMyDocument(documentId);
 
       // 第三步：暂存办事要求供报告页流式调用 /api/precheck 使用，
       // 然后立即跳转报告页——AI 生成过程以流式（打字机）呈现在报告页上。
