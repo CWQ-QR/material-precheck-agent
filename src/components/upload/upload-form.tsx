@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -15,15 +16,15 @@ import {
   uploadMaterial,
 } from "@/lib/materials";
 import { createPendingReport } from "@/lib/reports";
+import { saveRequirementsForStream } from "@/lib/stream-session";
 
-type UploadStatus = "idle" | "uploading" | "saving" | "analyzing" | "error";
+type UploadStatus = "idle" | "uploading" | "saving" | "error";
 
 const STATUS_TEXT: Record<UploadStatus, string> = {
-  idle: "上传并分析",
+  idle: "上传并开始预审",
   uploading: "正在上传文件…",
   saving: "上传成功，正在创建预审任务…",
-  analyzing: "AI 正在深度比对材料与要求...",
-  error: "上传并分析",
+  error: "上传并开始预审",
 };
 
 const REQUIREMENTS_PLACEHOLDER =
@@ -45,13 +46,6 @@ const REQUIREMENT_PRESETS = [
   },
 ];
 
-/**
- * 预审接口客户端等待上限。
- * 超时后不再阻塞页面：服务端会继续跑完并把 reports 置为 done/failed，
- * 报告页轮询会拿到最终状态。
- */
-const PRECHECK_REQUEST_TIMEOUT_MS = 120_000;
-
 function formatFileSize(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
@@ -68,7 +62,7 @@ export function UploadForm() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isProcessing =
-    status === "uploading" || status === "saving" || status === "analyzing";
+    status === "uploading" || status === "saving";
   const trimmedRequirements = requirements.trim();
   const canSubmit =
     !!file && trimmedRequirements.length > 0 && !isProcessing;
@@ -78,6 +72,25 @@ export function UploadForm() {
       inputRef.current.value = "";
     }
   };
+
+  /** 把整个上传状态机复位到初始可上传状态（含表单 UI 与已选文件） */
+  const resetFormState = () => {
+    setStatus("idle");
+    setFile(null);
+    setErrorMessage(null);
+    resetFileInput();
+  };
+
+  // 兜底：Next.js 在浏览器返回/前进时可能从路由缓存恢复本页的客户端状态
+  // （组件不会重新挂载），popstate 触发时强制复位，保证第二次上传可用。
+  useEffect(() => {
+    window.addEventListener("popstate", resetFormState);
+    return () => {
+      window.removeEventListener("popstate", resetFormState);
+    };
+    // resetFormState 仅由 setState 组成，无需加入依赖
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     // 处理中禁止更换文件，避免竞态
@@ -127,42 +140,23 @@ export function UploadForm() {
       });
       await createPendingReport(documentId);
 
-      // 第三步：调用后端预审接口（同步等待 AI 分析）。
-      // 加客户端超时，超时/网络异常不再留在本页报错——此时 pending 报告已建、
-      // 服务端会继续执行并回写状态，统一跳转报告页由轮询接管。
-      setStatus("analyzing");
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(
-        () => controller.abort(),
-        PRECHECK_REQUEST_TIMEOUT_MS
-      );
-      try {
-        const response = await fetch("/api/precheck", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            document_id: documentId,
-            requirements: trimmedRequirements,
-          }),
-          signal: controller.signal,
-        });
+      // 第三步：暂存办事要求供报告页流式调用 /api/precheck 使用，
+      // 然后立即跳转报告页——AI 生成过程以流式（打字机）呈现在报告页上。
+      // 服务端在任何失败路径都会把 reports 置为 failed，
+      // 流式结束后页面自动切换为从 Supabase 读取的正式报告。
+      saveRequirementsForStream({
+        document_id: documentId,
+        requirements: trimmedRequirements,
+      });
+      router.push(`/report/${documentId}?streaming=true`);
 
-        // 业务失败（如材料无法解析、AI 调用失败）时接口已把报告置为 failed，
-        // 仍跳转到报告页展示具体失败原因。
-        if (!response.ok) {
-          console.warn("预审接口返回失败:", await response.text());
-        }
-      } catch (error) {
-        console.warn(
-          "预审请求未正常完成（超时或网络异常），将跳转报告页继续等待:",
-          error instanceof Error ? error.message : error
-        );
-      } finally {
-        window.clearTimeout(timeoutId);
-      }
-
-      // 第四步：跳转到报告页（pending 时页面会自动轮询）
-      router.push(`/report/${documentId}`);
+      // 跳转发起后立即显式复位状态机：若本页随后被 Next 路由缓存复用
+      // （返回/前进恢复旧快照），恢复出来的也是干净的初始状态，
+      // 不会残留“上传中”转圈，第二次上传可直接进行。
+      // 复位后 file 为 null，canSubmit 自动为 false，跳转间隙也不会被重复提交。
+      setStatus("idle");
+      setFile(null);
+      resetFileInput();
     } catch (error) {
       const rawMessage =
         error instanceof Error ? error.message : "处理失败，请稍后重试";
@@ -172,6 +166,9 @@ export function UploadForm() {
         : rawMessage;
       setStatus("error");
       setErrorMessage(message);
+      // 失败路径同样清空已选文件与输入框，状态机回到可重新上传
+      setFile(null);
+      resetFileInput();
     }
   };
 
@@ -345,9 +342,7 @@ export function UploadForm() {
 
             {isProcessing && (
               <p className="mt-3 text-center text-xs text-slate-500">
-                {status === "analyzing"
-                  ? "AI 分析通常需要数秒到数十秒，请勿关闭页面或重复点击…"
-                  : "请勿关闭页面或重复点击按钮…"}
+                上传完成后将自动跳转到报告页，实时观看 AI 预审过程…
               </p>
             )}
           </form>

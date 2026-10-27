@@ -39,6 +39,9 @@ export function ReportView({
         {/* 结论 */}
         <div className="mt-8">
           <OverallResult overall={result.overall} />
+          <p className="mt-3 text-center text-xs text-slate-400">
+            📄 AI 识别到的材料：{result.document_type || "未知文档"}
+          </p>
         </div>
 
         {/* 问题清单 */}

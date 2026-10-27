@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { ReportPoller } from "@/components/report/report-poller";
+import { ReportEntry } from "@/components/report/report-entry";
 import { getReportSnapshotServer } from "@/lib/reports-server";
 
 export const metadata: Metadata = {
@@ -25,29 +25,41 @@ function ReportSkeleton() {
 
 /**
  * 预审报告页。
- * Next.js 16 中动态路由 params 为 Promise；DB 查询等运行时访问放在 Suspense 内。
+ * Next.js 16 中动态路由 params / searchParams 均为 Promise；DB 查询等运行时访问放在 Suspense 内。
  * 服务端先用 service role 取一次初始快照（避免首屏闪烁），
- * pending 时交给 ReportPoller 在浏览器端每 2 秒轮询。
+ * 再由 ReportEntry 决定：流式渐进渲染（streaming=true 且本地有办事要求）
+ * 或 2 秒轮询从 Supabase 读取。
  */
 async function ReportContent({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ streaming?: string }>;
 }) {
   const { id } = await params;
+  const query = await searchParams;
   const initial = await getReportSnapshotServer(id);
 
-  return <ReportPoller documentId={id} initial={initial} />;
+  return (
+    <ReportEntry
+      documentId={id}
+      initial={initial}
+      wantsStreaming={query.streaming === "true"}
+    />
+  );
 }
 
 export default function ReportPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ streaming?: string }>;
 }) {
   return (
     <Suspense fallback={<ReportSkeleton />}>
-      <ReportContent params={params} />
+      <ReportContent params={params} searchParams={searchParams} />
     </Suspense>
   );
 }

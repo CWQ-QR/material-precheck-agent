@@ -21,8 +21,8 @@ const OVERALL_META: Record<OverallStatus, OverallMeta> = {
     dotClass: "bg-amber-500",
   },
   reject: {
-    label: "不通过",
-    textColor: "text-red-600",
+    label: "不通过（材料严重不符）",
+    textColor: "text-red-700",
     badgeClass: "border-red-200 bg-red-50",
     dotClass: "bg-red-500",
   },
@@ -36,6 +36,11 @@ export function OverallResult({ overall }: { overall: OverallStatus }) {
       className={`flex flex-col items-center gap-4 rounded-3xl border px-8 py-10 text-center ${meta.badgeClass}`}
     >
       <span className="text-base font-medium text-slate-600">预审结果</span>
+      {overall === "reject" && (
+        <span className="text-5xl leading-none" role="img" aria-label="不通过">
+          ❌
+        </span>
+      )}
       <h2 className={`text-4xl font-bold tracking-tight sm:text-5xl ${meta.textColor}`}>
         预审结果：{meta.label}
       </h2>
