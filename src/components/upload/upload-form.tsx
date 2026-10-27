@@ -29,6 +29,22 @@ const STATUS_TEXT: Record<UploadStatus, string> = {
 const REQUIREMENTS_PLACEHOLDER =
   "例如：需要身份证、申请表，日期必须在2026年以后";
 
+/** 快捷场景 Tag：点击自动填入预设的办事要求文本 */
+const REQUIREMENT_PRESETS = [
+  {
+    label: "居住证办理",
+    text: "1. 身份证原件及正反面复印件；2. 居住登记回执；3. 近期一寸免冠照片 2 张；4. 房屋租赁合同或房产证复印件。所有材料须在有效期内。",
+  },
+  {
+    label: "人才落户",
+    text: "1. 身份证及户口簿首页、本人页复印件；2. 学历学位证书；3. 劳动合同及社保缴纳证明；4. 近期免冠照片。证件须在有效期内，日期须为 2026 年（含）以后。",
+  },
+  {
+    label: "学历认证",
+    text: "1. 身份证正反面扫描件；2. 毕业证书原件扫描件；3. 学位证书（如有）；4. 学信网学历备案表。扫描件须清晰完整，关键信息无遮挡。",
+  },
+];
+
 /**
  * 预审接口客户端等待上限。
  * 超时后不再阻塞页面：服务端会继续跑完并把 reports 置为 done/failed，
@@ -198,6 +214,29 @@ export function UploadForm() {
               >
                 办事要求
               </label>
+              <div className="mb-2.5 flex flex-wrap gap-2">
+                {REQUIREMENT_PRESETS.map((preset) => {
+                  const active = trimmedRequirements === preset.text;
+                  return (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      disabled={isProcessing}
+                      onClick={() => {
+                        setRequirements(preset.text);
+                        setErrorMessage(null);
+                      }}
+                      className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                        active
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/25"
+                          : "border border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
               <textarea
                 id="requirements"
                 name="requirements"
