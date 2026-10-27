@@ -63,3 +63,6 @@ export const precheckModel = wrapLanguageModel({
  * 直接走 Chat Completions 的多模态消息（image_url + base64 data URL）。
  */
 export const visionModel = openai.chat(visionModelName);
+
+/** 纯文本生成（补正说明等工具能力）：无需 json 兼容中间件 */
+export const chatModel = openai.chat(modelName);

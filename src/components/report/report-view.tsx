@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { PrecheckResult } from "@/lib/types";
 import { OverallResult } from "./overall-result";
 import { IssueCard } from "./issue-card";
+import { GenerateNotePanel } from "./generate-note-panel";
 
 export function ReportView({
   documentId,
@@ -69,11 +70,12 @@ export function ReportView({
           )}
         </section>
 
-        {/* 底部操作 */}
-        <div className="mt-10 flex justify-center">
+        {/* 底部操作：有问题时提供 AI 补正说明生成 */}
+        <div className="mt-10 flex flex-col items-center gap-4">
+          {issueCount > 0 && <GenerateNotePanel issues={result.issues} />}
           <Link
             href="/upload"
-            className="inline-flex h-11 items-center justify-center rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-8 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-600/30"
+            className="inline-flex h-11 items-center justify-center rounded-full border border-slate-300 bg-white px-8 text-sm font-semibold text-slate-700 transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
           >
             再预审一份材料
           </Link>
