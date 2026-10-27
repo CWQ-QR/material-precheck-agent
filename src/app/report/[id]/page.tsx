@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { ReportEntry } from "@/components/report/report-entry";
+import { DownloadPdfButton } from "@/components/report/download-pdf-button";
 import { getReportSnapshotServer } from "@/lib/reports-server";
 
 export const metadata: Metadata = {
@@ -42,11 +43,15 @@ async function ReportContent({
   const initial = await getReportSnapshotServer(id);
 
   return (
-    <ReportEntry
-      documentId={id}
-      initial={initial}
-      wantsStreaming={query.streaming === "true"}
-    />
+    // 核心内容区域：PDF 导出时以此元素为截图范围（不含全局导航栏）
+    <div id="report-content" className="relative min-h-full">
+      <ReportEntry
+        documentId={id}
+        initial={initial}
+        wantsStreaming={query.streaming === "true"}
+      />
+      <DownloadPdfButton />
+    </div>
   );
 }
 
