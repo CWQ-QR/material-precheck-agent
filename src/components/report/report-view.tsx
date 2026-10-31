@@ -11,7 +11,14 @@ export function ReportView({
   documentId: string;
   result: PrecheckResult;
 }) {
-  const issueCount = result.issues.length;
+  // 按 description 去重：弱模型偶发输出重复条目，同一问题描述只渲染一次。
+  // 无论数据来自 Supabase 查询还是流式 onFinish，都在渲染前统一过滤。
+  const uniqueIssues = Array.from(
+    new Map(
+      (result.issues || []).map((item) => [item.description, item])
+    ).values()
+  );
+  const issueCount = uniqueIssues.length;
 
   return (
     <div className="min-h-full bg-slate-50 font-sans">
@@ -56,9 +63,13 @@ export function ReportView({
           </div>
 
           {issueCount > 0 ? (
-            <div className="mt-4 space-y-4">
-              {result.issues.map((issue, index) => (
-                <IssueCard key={index} issue={issue} index={index} />
+            <div className="mt-4 flex flex-col gap-4">
+              {uniqueIssues.map((issue, index) => (
+                <IssueCard
+                  key={`${issue.type}-${index}-${issue.description.slice(0, 10)}`}
+                  issue={issue}
+                  index={index}
+                />
               ))}
             </div>
           ) : (
@@ -75,7 +86,7 @@ export function ReportView({
 
         {/* 底部操作：有问题时提供 AI 补正说明生成 */}
         <div className="mt-10 flex flex-col items-center gap-4">
-          {issueCount > 0 && <GenerateNotePanel issues={result.issues} />}
+          {issueCount > 0 && <GenerateNotePanel issues={uniqueIssues} />}
           <Link
             href="/upload"
             className="inline-flex h-11 items-center justify-center rounded-full border border-slate-300 bg-white px-8 text-sm font-semibold text-slate-700 transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"

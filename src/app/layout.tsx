@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -34,7 +35,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         >
           <Navbar />
         </Suspense>
-        {children}
+        {/* flex-1 让内容区撑满剩余高度，页脚始终贴在页面最底部 */}
+        <div className="flex flex-1 flex-col">
+          {children}
+        </div>
+        <Footer />
       </body>
     </html>
   );

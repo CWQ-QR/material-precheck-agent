@@ -32,7 +32,7 @@ export default function AboutPage() {
         className="pointer-events-none absolute -top-40 left-1/2 h-[320px] w-[600px] -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-200/50 via-violet-200/40 to-sky-200/50 blur-3xl"
       />
 
-      <main className="relative z-10 mx-auto w-full max-w-3xl px-6 py-16">
+      <main className="relative z-10 mx-auto w-full max-w-3xl px-4 py-16 sm:px-6">
         {/* 参赛徽章 */}
         <span className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/80 px-4 py-1.5 text-sm font-medium text-indigo-700 shadow-sm backdrop-blur">
           <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
@@ -85,6 +85,25 @@ export default function AboutPage() {
             材料文件存储于 Supabase 私有 Storage 桶，数据库启用了行级安全（RLS）；
             AI 预审严格遵循「只基于材料原文作答、不编造」的系统约束，
             无原文依据的结论都会显式标注“原文未提及，请人工核对”。
+          </p>
+        </section>
+
+        {/* 开发者名片（脱敏版）：仅展示网名 / GitHub ID，不公开真实姓名 */}
+        <section className="mt-12 rounded-2xl bg-gray-50 p-6 text-sm text-gray-500 ring-1 ring-inset ring-slate-200/60">
+          <p className="font-semibold text-gray-700">开发者：CWQ-QR</p>
+          <p className="mt-1.5">
+            开源地址：
+            <a
+              href="https://github.com/CWQ-QR"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-600 underline-offset-4 transition-colors hover:text-indigo-700 hover:underline"
+            >
+              github.com/CWQ-QR
+            </a>
+          </p>
+          <p className="mt-3 leading-6">
+            本项目由 CWQ 独立设计与开发，第九届传智杯参赛作品。
           </p>
         </section>
 

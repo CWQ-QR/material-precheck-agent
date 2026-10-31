@@ -237,7 +237,10 @@ export function StreamingReport({
   }, [documentId, requirements]);
 
   if (phase === "done" && finalResult) {
-    // 与「刷新后从 Supabase 渲染」完全相同的正式报告视图
+    // 流式结束（onFinish）后，彻底切断 partial 半成品渲染：
+    // finalResult 是通过 Zod 全量校验的完整结果，与服务端 onFinish 写入
+    // Supabase 的 result 是同一份数据——与「刷新后从数据库渲染」完全一致。
+    // 整个 return 是互斥分支，流式中间态不可能与最终数据叠加。
     return <ReportView documentId={documentId} result={finalResult} />;
   }
 
@@ -248,6 +251,15 @@ export function StreamingReport({
 
   // ---- 流式进行中：AI 思考横幅 + 渐进问题卡片 ----
   const issues = partial.issues ?? [];
+  // 按 description 去重（AI 偶发输出重复条目）；
+  // 描述尚未解析出的半成品条目各自保留，继续走骨架屏
+  const seenDescriptions = new Set<string>();
+  const uniqueIssues = issues.filter((issue) => {
+    if (!issue.description) return true;
+    if (seenDescriptions.has(issue.description)) return false;
+    seenDescriptions.add(issue.description);
+    return true;
+  });
   const overallText =
     partial.overall !== undefined ? OVERALL_LABEL[partial.overall] : null;
   // 阶段一：已收到流式数据，但还没解析出 overall → 呼吸灯「阅读比对」提示
@@ -329,7 +341,7 @@ export function StreamingReport({
                       ? "🔍 AI 正在阅读材料并比对规则..."
                       : partial.issues === undefined
                         ? "已完成初步判断，正在逐项排查问题…"
-                        : `已排查出 ${issues.length} 项问题，正在核对原文依据与建议…`}
+                        : `已排查出 ${uniqueIssues.length} 项问题，正在核对原文依据与建议…`}
                 </p>
               </div>
             </div>
@@ -413,14 +425,16 @@ export function StreamingReport({
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">问题清单</h2>
             <span className="rounded-full bg-slate-200/70 px-3 py-1 text-xs font-medium text-slate-600">
-              {issues.length > 0 ? `已发现 ${issues.length} 项` : "检查中"}
+              {uniqueIssues.length > 0
+                ? `已发现 ${uniqueIssues.length} 项`
+                : "检查中"}
             </span>
           </div>
 
-          <div className="mt-4 space-y-4">
-            {issues.map((issue, index) => (
+          <div className="mt-4 flex flex-col gap-4">
+            {uniqueIssues.map((issue, index) => (
               <StreamingIssueCard
-                key={index}
+                key={`${issue.type ?? "pending"}-${index}-${(issue.description ?? "").slice(0, 10)}`}
                 issue={issue}
                 index={index}
               />
