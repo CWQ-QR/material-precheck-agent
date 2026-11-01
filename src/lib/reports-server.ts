@@ -1,11 +1,21 @@
-import { supabaseAdmin } from "./supabase-admin";
+import {
+  getSupabaseAdmin,
+  SUPABASE_ADMIN_NOT_CONFIGURED_MESSAGE,
+} from "./supabase-admin";
 import { normalizeReportRow, type ReportRow } from "./report-snapshot";
 import type { PrecheckResult, ReportSnapshot } from "./types";
 
-/** 服务端：按 document_id 查询报告快照（service role 绕过 RLS） */
+/** 服务端：按 document_id 查询报告快照（service role 绕过 RLS）。
+ * 环境变量缺失时返回 null（页面据此降级渲染，绝不 SSR 崩溃） */
 export async function getReportSnapshotServer(
   documentId: string
 ): Promise<ReportSnapshot | null> {
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) {
+    console.error(SUPABASE_ADMIN_NOT_CONFIGURED_MESSAGE);
+    return null;
+  }
+
   const { data, error } = await supabaseAdmin
     .from("reports")
     .select("id,document_id,status,result,created_at")
@@ -24,6 +34,14 @@ export async function markReportDone(
   documentId: string,
   result: PrecheckResult
 ): Promise<void> {
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) {
+    console.error(
+      `${SUPABASE_ADMIN_NOT_CONFIGURED_MESSAGE}，报告 ${documentId} 结果未落库`
+    );
+    return;
+  }
+
   const { error } = await supabaseAdmin
     .from("reports")
     .update({ status: "done", result })
@@ -42,6 +60,14 @@ export async function markReportFailed(
   documentId: string,
   errorMessage: string
 ): Promise<void> {
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) {
+    console.error(
+      `${SUPABASE_ADMIN_NOT_CONFIGURED_MESSAGE}，报告 ${documentId} 失败状态未落库: ${errorMessage}`
+    );
+    return;
+  }
+
   const { error } = await supabaseAdmin
     .from("reports")
     .update({

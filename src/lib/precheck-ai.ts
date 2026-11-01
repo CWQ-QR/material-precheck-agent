@@ -70,7 +70,7 @@ export async function generatePrecheckObject(input: {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
       const { object } = await generateObject({
-        model: precheckModel,
+        model: precheckModel(),
         schema: precheckResultSchema,
         schemaName: "PrecheckResult",
         system: PRECHECK_SYSTEM_PROMPT,
@@ -120,7 +120,7 @@ export async function extractTextFromImage(
 
   try {
     const { text } = await generateText({
-      model: visionModel,
+      model: visionModel(),
       temperature: 0,
       maxRetries: 1,
       abortSignal: AbortSignal.timeout(AI_CALL_TIMEOUT_MS),

@@ -1,4 +1,7 @@
-import { supabase } from "./supabase";
+import {
+  supabase,
+  SUPABASE_NOT_CONFIGURED_MESSAGE,
+} from "./supabase";
 import { normalizeReportRow, type ReportRow } from "./report-snapshot";
 import type { ReportSnapshot } from "./types";
 
@@ -6,6 +9,9 @@ import type { ReportSnapshot } from "./types";
 export async function createPendingReport(
   documentId: string
 ): Promise<string> {
+  if (!supabase) {
+    throw new Error(SUPABASE_NOT_CONFIGURED_MESSAGE);
+  }
   const { data, error } = await supabase
     .from("reports")
     .insert({
@@ -32,6 +38,9 @@ export async function createPendingReport(
 export async function fetchReportSnapshot(
   documentId: string
 ): Promise<ReportSnapshot | null> {
+  if (!supabase) {
+    throw new Error(SUPABASE_NOT_CONFIGURED_MESSAGE);
+  }
   const { data, error } = await supabase
     .from("reports")
     .select("id,document_id,status,result,created_at")

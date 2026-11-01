@@ -12,10 +12,19 @@ const modelName = process.env.AI_MODEL ?? "glm-4-flash";
 // 视觉模型：用于从图片材料中 OCR 提取文字（glm-4v-flash 免费且兼容 OpenAI 格式）
 const visionModelName = process.env.AI_VISION_MODEL ?? "glm-4v-flash";
 
-if (!apiKey || !baseURL) {
-  throw new Error(
-    "缺少 AI 环境变量：请在 .env.local 中配置 AI_API_KEY 与 AI_BASE_URL"
-  );
+/**
+ * 懒加载校验：环境变量缺失不能在模块顶层 throw——
+ * 否则线上部署未配置 AI_ 变量时，路由模块导入即崩、错误无法被
+ * 路由的 try/catch 捕获（报告会永远卡在 pending）。
+ * 放到首次调用时抛出，路由可捕获并把报告置为 failed。
+ */
+function assertAiConfigured(): { apiKey: string; baseURL: string } {
+  if (!apiKey || !baseURL) {
+    throw new Error(
+      "缺少 AI 环境变量：请在部署平台配置 AI_API_KEY 与 AI_BASE_URL"
+    );
+  }
+  return { apiKey, baseURL };
 }
 
 /**
@@ -44,25 +53,35 @@ const zhipuJsonModeMiddleware: LanguageModelV4Middleware = {
   },
 };
 
-/** OpenAI 兼容客户端实例（指向智谱 open.bigmodel.cn） */
-export const openai = createOpenAI({
-  baseURL,
-  apiKey,
-  name: "zhipu",
-});
+/** OpenAI 兼容客户端实例（指向智谱 open.bigmodel.cn，懒加载缓存） */
+let cachedOpenai: ReturnType<typeof createOpenAI> | null = null;
+
+function getOpenAI() {
+  if (!cachedOpenai) {
+    const { apiKey: key, baseURL: url } = assertAiConfigured();
+    cachedOpenai = createOpenAI({ baseURL: url, apiKey: key, name: "zhipu" });
+  }
+  return cachedOpenai;
+}
 
 /** 预审任务使用的模型：Chat Completions 通道 + json_object 兼容包装 */
-export const precheckModel = wrapLanguageModel({
-  model: openai.chat(modelName),
-  middleware: zhipuJsonModeMiddleware,
-});
+export function precheckModel() {
+  return wrapLanguageModel({
+    model: getOpenAI().chat(modelName),
+    middleware: zhipuJsonModeMiddleware,
+  });
+}
 
 /**
  * 图片 OCR 使用的视觉模型。
  * generateText 不下发 response_format，无需 json 兼容中间件，
  * 直接走 Chat Completions 的多模态消息（image_url + base64 data URL）。
  */
-export const visionModel = openai.chat(visionModelName);
+export function visionModel() {
+  return getOpenAI().chat(visionModelName);
+}
 
 /** 纯文本生成（补正说明等工具能力）：无需 json 兼容中间件 */
-export const chatModel = openai.chat(modelName);
+export function chatModel() {
+  return getOpenAI().chat(modelName);
+}

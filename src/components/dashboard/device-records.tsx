@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { supabase, SUPABASE_NOT_CONFIGURED_MESSAGE } from "@/lib/supabase";
 import { getMyDocuments } from "@/lib/user";
 import { normalizeReportRow } from "@/lib/report-snapshot";
 import type { ReportSnapshot } from "@/lib/types";
@@ -205,6 +205,11 @@ export function DeviceRecords() {
       setRows(null);
 
       const ids = getMyDocuments();
+      // 环境变量缺失（未配置或构建时未注入）：显示友好错误态，不崩溃
+      if (!supabase) {
+        setError(SUPABASE_NOT_CONFIGURED_MESSAGE);
+        return;
+      }
       // 本设备还没有任何上传记录：直接显示空状态，不打数据库
       if (ids.length === 0) {
         if (!cancelled) setRows([]);

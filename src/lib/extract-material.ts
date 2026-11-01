@@ -1,4 +1,7 @@
-import { supabaseAdmin } from "./supabase-admin";
+import {
+  getSupabaseAdmin,
+  SUPABASE_ADMIN_NOT_CONFIGURED_MESSAGE,
+} from "./supabase-admin";
 import { MATERIALS_BUCKET } from "./materials";
 import { extractTextFromImage } from "./precheck-ai";
 
@@ -6,6 +9,11 @@ import { extractTextFromImage } from "./precheck-ai";
 export async function getDocumentFilePath(
   documentId: string
 ): Promise<string> {
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) {
+    throw new Error(SUPABASE_ADMIN_NOT_CONFIGURED_MESSAGE);
+  }
+
   const { data, error } = await supabaseAdmin
     .from("documents")
     .select("file_path")
@@ -56,6 +64,11 @@ const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
  * - 文本文件：直接按 UTF-8 读取
  */
 export async function extractMaterialText(filePath: string): Promise<string> {
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) {
+    throw new Error(SUPABASE_ADMIN_NOT_CONFIGURED_MESSAGE);
+  }
+
   const { data: blob, error } = await supabaseAdmin.storage
     .from(MATERIALS_BUCKET)
     .download(filePath);

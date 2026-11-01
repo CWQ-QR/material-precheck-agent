@@ -13,6 +13,7 @@ export interface StoredRequirements {
 
 /** 保存本次上传对应的办事要求（每次上传覆盖写入） */
 export function saveRequirementsForStream(value: StoredRequirements): void {
+  if (typeof window === "undefined") return;
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(value));
   } catch {

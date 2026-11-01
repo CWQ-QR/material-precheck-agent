@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, SUPABASE_NOT_CONFIGURED_MESSAGE } from "./supabase";
 
 /** Storage 中存放办事材料的桶名 */
 export const MATERIALS_BUCKET = "materials";
@@ -138,6 +138,9 @@ export function buildStoragePath(file: File): string {
 /** 将文件上传到 materials 桶，返回桶内文件路径 */
 export async function uploadMaterial(file: File): Promise<string> {
   assertAcceptedFile(file);
+  if (!supabase) {
+    throw new Error(SUPABASE_NOT_CONFIGURED_MESSAGE);
+  }
 
   const filePath = buildStoragePath(file);
   const { error } = await supabase.storage
@@ -159,6 +162,9 @@ export async function registerDocument(input: {
   fileName: string;
   filePath: string;
 }): Promise<string> {
+  if (!supabase) {
+    throw new Error(SUPABASE_NOT_CONFIGURED_MESSAGE);
+  }
   const { data, error } = await supabase
     .from("documents")
     .insert({

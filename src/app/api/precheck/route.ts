@@ -124,7 +124,7 @@ export async function POST(request: Request): Promise<Response> {
   };
 
   const result = streamObject({
-    model: precheckModel,
+    model: precheckModel(),
     schema: precheckResultSchema,
     schemaName: "PrecheckResult",
     system: PRECHECK_SYSTEM_PROMPT,

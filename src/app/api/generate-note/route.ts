@@ -78,7 +78,7 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const { text } = await generateText({
-      model: chatModel,
+      model: chatModel(),
       system:
         "你是一个办事协助专家。请根据用户提供的材料问题列表，" +
         "帮用户写一段发给办事窗口工作人员的补正说明。" +
