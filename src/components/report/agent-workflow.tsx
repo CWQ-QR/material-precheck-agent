@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /** Agent 工作流的四个步骤（按顺序点亮） */
 const WORKFLOW_STEPS = [
@@ -10,27 +10,50 @@ const WORKFLOW_STEPS = [
   "正在生成结构化预审报告...",
 ] as const;
 
-/** 每个步骤的停留时长（毫秒） */
-const STEP_DURATION_MS = 4000;
+/** 每个步骤的停留时长（毫秒）：2s × 4 步 = 8 秒，每一步都能被看清 */
+const STEP_DURATION_MS = 2000;
+
+/** 四步全部完成后，"全绿勾"完成态的停留时长（毫秒），再交棒给真实结果面板 */
+const FINISH_HOLD_MS = 800;
 
 /**
  * AI Agent 工作流状态面板（页面中央）。
  *
  * - 用 useState + setTimeout 模拟多步工作流：步骤随时间逐个亮起，
- *   已完成步骤打勾、当前步骤转圈、未来步骤置灰；
- * - 最后一步保持"执行中"（不再排定时器），直到真实结果到达后
- *   由调用方整体切换视图、本组件卸载；
- * - 每个定时器都在 effect cleanup 中清理，组件卸载绝不残留。
+ *   已完成步骤打绿勾、当前步骤转圈、未来步骤置灰；
+ * - 每一步（含最后一步）都完整停留 2s；四步全绿后再停留 0.8s，
+ *   全程约 9 秒，保证用户和评委有充足的感知时间；
+ * - 每个定时器都在 effect cleanup 中清理，组件卸载绝不残留；
+ * - 可选 onComplete：动画完整播放完毕后触发（调用方据此把渲染权交给
+ *   真实结果面板；数据提前返回时已在后台缓冲，不会打断动画）。
  */
-export function AgentWorkflowPanel() {
+export function AgentWorkflowPanel({
+  onComplete,
+}: {
+  onComplete?: () => void;
+}) {
   const [step, setStep] = useState(0);
+  // 用 ref 保存回调，避免父组件每次渲染传入新函数导致 effect 反复触发
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
-    if (step >= WORKFLOW_STEPS.length - 1) return;
-    const timer = window.setTimeout(
-      () => setStep((current) => current + 1),
-      STEP_DURATION_MS
-    );
+    if (step < WORKFLOW_STEPS.length) {
+      // 逐步推进：每一步（含最后一步）都完整停留 2s 再进入下一步
+      const timer = window.setTimeout(
+        () => setStep((current) => current + 1),
+        STEP_DURATION_MS
+      );
+      return () => window.clearTimeout(timer);
+    }
+    // 四步全部走完（此时渲染为"全绿勾"）：停留片刻展示完成态，
+    // 再通知调用方切换视图（幂等；无论真实数据多快返回，
+    // 动画都保证完整播放 2s × 4 + 0.8s ≈ 9 秒）
+    const timer = window.setTimeout(() => {
+      onCompleteRef.current?.();
+    }, FINISH_HOLD_MS);
     return () => window.clearTimeout(timer);
   }, [step]);
 

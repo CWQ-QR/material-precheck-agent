@@ -165,6 +165,8 @@ export function StreamingReport({
   const [partial, setPartial] = useState<PrecheckPartialResult>({});
   const [charCount, setCharCount] = useState(0);
   const [finalResult, setFinalResult] = useState<PrecheckResult | null>(null);
+  // Agent 工作流动画是否已完整播放（4 步 × 2s + 完成停留 ≈ 9s，由面板 onComplete 通知）
+  const [workflowDone, setWorkflowDone] = useState(false);
   // StrictMode 下 effect 会双跑，用 ref 保证流只发起一次
   const startedRef = useRef(false);
 
@@ -236,11 +238,13 @@ export function StreamingReport({
     void run();
   }, [documentId, requirements]);
 
-  if (phase === "done" && finalResult) {
+  if (phase === "done" && finalResult && workflowDone) {
     // 流式结束（onFinish）后，彻底切断 partial 半成品渲染：
     // finalResult 是通过 Zod 全量校验的完整结果，与服务端 onFinish 写入
     // Supabase 的 result 是同一份数据——与「刷新后从数据库渲染」完全一致。
     // 整个 return 是互斥分支，流式中间态不可能与最终数据叠加。
+    // && workflowDone：AI 响应极快时也保证工作流动画先完整播放（≥8s），
+    // 数据已在 partial/finalResult 中缓冲，动画播完后平滑切换。
     return <ReportView documentId={documentId} result={finalResult} />;
   }
 
@@ -264,6 +268,9 @@ export function StreamingReport({
     partial.overall !== undefined ? OVERALL_LABEL[partial.overall] : null;
   // 阶段一：已收到流式数据，但还没解析出 overall → 呼吸灯「阅读比对」提示
   const readingRules = charCount > 0 && partial.overall === undefined;
+  // Agent 工作流面板显示条件：动画未播完（即使数据已在后台缓冲）或
+  // 首个数据块尚未到达。两者都满足后才切换到流式横幅/问题卡片。
+  const showWorkflow = !workflowDone || charCount === 0;
 
   return (
     <div className="min-h-full bg-slate-50 font-sans">
@@ -291,11 +298,12 @@ export function StreamingReport({
           <span className="text-xs text-slate-400">文档编号：{documentId}</span>
         </div>
 
-        {/* AI 思考横幅：首个数据块到达前显示 Agent 工作流面板，
-            数据开始真正返回后隐藏面板、切换为流式横幅并渐进展示结果 */}
-        {charCount === 0 ? (
+        {/* AI 思考横幅：Agent 工作流面板播放期间（即使数据已在后台缓冲）
+            保持显示，动画播完且首个数据块到达后，才切换为流式横幅并
+            渐进展示结果——保证面板完整播放 ≥8 秒，不闪过 */}
+        {showWorkflow ? (
           <div className="mt-8">
-            <AgentWorkflowPanel />
+            <AgentWorkflowPanel onComplete={() => setWorkflowDone(true)} />
           </div>
         ) : (
         <div className="mt-8 overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-violet-50 to-sky-50 shadow-sm">
