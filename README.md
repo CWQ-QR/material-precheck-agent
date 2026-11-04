@@ -22,9 +22,11 @@
 ## 🚀 本地运行指南
 
 ### 1. 克隆与安装
+```
 git clone https://github.com/CWQ-QR/material-precheck-agent.git
 cd material-precheck-agent
 npm install
+```
 
 ### 2. 配置环境变量
 复制根目录下的 `.env.example` 为 `.env.local` 并填写。
