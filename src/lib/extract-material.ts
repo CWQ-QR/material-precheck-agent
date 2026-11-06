@@ -24,32 +24,21 @@ async function importFromNodeModules(relativePath: string): Promise<any> {
 }
 
 /**
- * 注入 pdfjs 需要的浏览器 API（服务端运行时没有 DOMMatrix 等）。
- * 必须在加载 pdfjs-dist 之前调用。
+ * pdf-parse 官方在 Serverless 环境下的加载方案：
+ * 先加载它的 worker 模块（注入 DOMMatrix / ImageData / Path2D 并注册内联
+ * pdf.js worker），再加载解析器，避免线上报 "DOMMatrix is not defined"。
  *
- * @napi-rs/canvas 是原生模块，不能被打包器处理；
- * 这里在运行时从 node_modules 直接加载，只在解析 PDF 时执行一次。
+ * 这里不用文件顶层的 `import "pdf-parse/worker"`：本项目 Next 16 + Turbopack
+ * 会把 serverExternalPackages 里的包改写成 "pdf-parse-<hash>/worker"，
+ * 构建收集页面数据时报 ERR_MODULE_NOT_FOUND。改为运行时从 node_modules
+ * 原生加载，效果相同且不经过打包器。
  */
-async function ensurePdfjsPolyfills(): Promise<void> {
-  if (typeof (globalThis as any).DOMMatrix !== "undefined") return;
-
-  const canvas = (await importFromNodeModules(
-    path.join("@napi-rs", "canvas", "index.js")
-  )) as { DOMMatrix: unknown; ImageData: unknown; Path2D: unknown };
-
-  (globalThis as any).DOMMatrix = canvas.DOMMatrix;
-  (globalThis as any).ImageData = canvas.ImageData;
-  (globalThis as any).Path2D = canvas.Path2D;
-}
-
-/**
- * 加载 pdfjs-dist 的 legacy 构建（对 Node.js 兼容性更好）。
- * 直接从 node_modules 以 file:// URL 原生导入，
- * 避免打包器把这份 PDF.js 产物打进 bundle 或改写成外部包目录。
- */
-async function loadPdfjs(): Promise<any> {
+async function loadPdfParse(): Promise<any> {
+  await importFromNodeModules(
+    path.join("pdf-parse", "dist", "worker", "esm", "index.js")
+  );
   return importFromNodeModules(
-    path.join("pdfjs-dist", "legacy", "build", "pdf.mjs")
+    path.join("pdf-parse", "dist", "pdf-parse", "esm", "index.js")
   );
 }
 
@@ -107,7 +96,7 @@ const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
 
 /**
  * 从 Storage 下载材料并提取纯文本。
- * - PDF：pdfjs-dist（legacy 构建 + @napi-rs/canvas Polyfill）解析
+ * - PDF：pdf-parse（配合 pdf-parse/worker 的 Serverless 方案）解析
  * - 图片：视觉模型 OCR 提取文字
  * - 文本文件：直接按 UTF-8 读取
  */
@@ -129,33 +118,18 @@ export async function extractMaterialText(filePath: string): Promise<string> {
   const mimeType = blob.type;
 
   if (ext === "pdf" || mimeType === "application/pdf") {
-    // 使用 pdfjs-dist 的 legacy 构建（对 Node.js 兼容性更好），
-    // 并配合上方 @napi-rs/canvas 注入的浏览器 API Polyfill。
-    // 动态导入：仅解析 PDF 时才加载这份较大的 PDF.js 产物。
     try {
-      await ensurePdfjsPolyfills();
-      const pdfjsLib = await loadPdfjs();
-      const loadingTask = pdfjsLib.getDocument({
+      const { PDFParse } = await loadPdfParse();
+      const parser = new PDFParse({
         data: new Uint8Array(await blob.arrayBuffer()),
-        useWorkerFetch: false,
-        useSystemFonts: true,
       });
-      const pdfDocument = await loadingTask.promise;
-      let fullText = "";
 
       try {
-        for (let i = 1; i <= pdfDocument.numPages; i++) {
-          const page = await pdfDocument.getPage(i);
-          const textContent = await page.getTextContent();
-          const pageText = textContent.items
-            .map((item: { str?: string }) => item.str ?? "")
-            .join(" ");
-          fullText += pageText + "\n";
-        }
-        return fullText.trim();
+        const result = await parser.getText({ pageJoiner: "\n\n" });
+        return result.text.trim();
       } finally {
-        // 释放 worker/传输层资源，避免 Serverless 实例内存泄漏
-        await loadingTask.destroy();
+        // 释放解析器资源，避免 Serverless 实例内存泄漏
+        await parser.destroy();
       }
     } catch (error) {
       console.error("[extract-material] PDF 解析失败:", error);
