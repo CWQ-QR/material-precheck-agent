@@ -59,7 +59,7 @@ const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
 
 /**
  * 从 Storage 下载材料并提取纯文本。
- * - PDF：pdf-parse（PDF.js）解析
+ * - PDF：unpdf（自带无服务器适配的 PDF.js 构建）解析
  * - 图片：视觉模型 OCR 提取文字
  * - 文本文件：直接按 UTF-8 读取
  */
@@ -81,22 +81,19 @@ export async function extractMaterialText(filePath: string): Promise<string> {
   const mimeType = blob.type;
 
   if (ext === "pdf" || mimeType === "application/pdf") {
-    // 不用动态 import：Turbopack 对 serverExternalPackages 的运行时
-    // junction 机制在 Windows 上不稳定（断链/EPERM）。
-    // 改用 createRequire 让 Node 直接从项目 node_modules 解析，
-    // 完全绕开 [turbopack]_runtime 的外部模块加载。
-    const { createRequire } = await import("node:module");
-    const nodeRequire = createRequire(import.meta.url);
-    const { PDFParse } = nodeRequire("pdf-parse") as typeof import("pdf-parse");
-    const parser = new PDFParse({
-      data: new Uint8Array(await blob.arrayBuffer()),
-    });
+    // unpdf 自带针对无服务器/边缘运行时裁剪的 PDF.js 构建，
+    // 不依赖 DOMMatrix、canvas 等浏览器 API，可在 EdgeOne 等环境运行。
+    // 动态导入：仅解析 PDF 时才加载这份较大的 PDF.js 产物。
+    const { getDocumentProxy, extractText } = await import("unpdf");
+    const pdf = await getDocumentProxy(
+      new Uint8Array(await blob.arrayBuffer())
+    );
 
     try {
-      const result = await parser.getText({ pageJoiner: "\n\n" });
-      return result.text.trim();
+      const { text } = await extractText(pdf, { mergePages: true });
+      return text.trim();
     } finally {
-      await parser.destroy();
+      await pdf.cleanup();
     }
   }
 

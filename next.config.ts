@@ -7,9 +7,8 @@ const nextConfig: NextConfig = {
    * 会被边缘环境提前断流，客户端抛 React #412（"Connection closed."）。
    * 关闭后所有路由使用标准 SSR 流式响应，兼容性最好。
    */
-  // pdf-parse 依赖 pdf.js 与 @napi-rs/canvas 原生模块，
-  // 路由中通过 Node 原生方式加载，不打包进 bundle。
-  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "@napi-rs/canvas"],
+  // PDF 解析用 unpdf：自带无服务器适配的 PDF.js 构建，无原生依赖，
+  // 无需再从外部包加载（原 pdf-parse 在 EdgeOne 上报 DOMMatrix 未定义）。
   turbopack: {
     rules: {
       "*.css": {
