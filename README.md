@@ -9,7 +9,7 @@
 
 ## ✨ 核心特性
 
-- **多模态解析**：集成智谱 GLM-4V 视觉模型与 unpdf，支持纸质拍照与电子版 PDF 提取。
+- **多模态解析**：集成智谱 GLM-4V 视觉模型与 pdfjs-serverless，支持纸质拍照与电子版 PDF 提取。
 - **三位一体防幻觉机制**：硬代码拦截 + Zod Schema 强制溯源 + System Prompt 类型预判，彻底杜绝 AI 瞎编。
 - **Agent 思考可视化**：前端四步工作流动态展示，结合 Vercel AI SDK 流式输出（打字机效果）。
 - **数据隔离与安全**：基于 Supabase RLS 与前端 LocalStorage 实现轻量级设备数据隔离。

@@ -59,7 +59,7 @@ const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
 
 /**
  * 从 Storage 下载材料并提取纯文本。
- * - PDF：unpdf（自带无服务器适配的 PDF.js 构建）解析
+ * - PDF：pdfjs-serverless（服务端裁剪版 PDF.js）解析
  * - 图片：视觉模型 OCR 提取文字
  * - 文本文件：直接按 UTF-8 读取
  */
@@ -81,19 +81,35 @@ export async function extractMaterialText(filePath: string): Promise<string> {
   const mimeType = blob.type;
 
   if (ext === "pdf" || mimeType === "application/pdf") {
-    // unpdf 自带针对无服务器/边缘运行时裁剪的 PDF.js 构建，
-    // 不依赖 DOMMatrix、canvas 等浏览器 API，可在 EdgeOne 等环境运行。
+    // pdfjs-serverless 是面向边缘/无服务器运行时分发的 PDF.js 构建，
+    // 不依赖 DOMMatrix、canvas 等浏览器 API。
     // 动态导入：仅解析 PDF 时才加载这份较大的 PDF.js 产物。
-    const { getDocumentProxy, extractText } = await import("unpdf");
-    const pdf = await getDocumentProxy(
-      new Uint8Array(await blob.arrayBuffer())
-    );
-
     try {
-      const { text } = await extractText(pdf, { mergePages: true });
-      return text.trim();
-    } finally {
-      await pdf.cleanup();
+      const { resolvePDFJS } = await import("pdfjs-serverless");
+      const { getDocument } = await resolvePDFJS();
+      const loadingTask = getDocument({
+        data: new Uint8Array(await blob.arrayBuffer()),
+      });
+      const doc = await loadingTask.promise;
+
+      try {
+        let fullText = "";
+        for (let i = 1; i <= doc.numPages; i++) {
+          const page = await doc.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item) => ("str" in item ? item.str : ""))
+            .join(" ");
+          fullText += pageText + "\n";
+        }
+        return fullText.trim();
+      } finally {
+        // 释放 worker/传输层资源，避免 Serverless 实例内存泄漏
+        await loadingTask.destroy();
+      }
+    } catch (error) {
+      console.error("[extract-material] PDF 解析失败:", error);
+      throw new Error("PDF解析失败，请检查文件格式或稍后重试");
     }
   }
 
