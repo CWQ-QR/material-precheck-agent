@@ -1,13 +1,11 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { loadRequirementsForStream } from "@/lib/stream-session";
+import type { StoredRequirements } from "@/lib/stream-session";
 import type { ReportSnapshot } from "@/lib/types";
 import { ReportPoller } from "./report-poller";
 import { StreamingReport } from "./streaming-report";
-
-/** sessionStorage 在本次流程中不会被外部推送变更，订阅保持空实现即可 */
-const subscribeToSessionStorage = () => () => {};
 
 /**
  * 报告页入口：决定「流式渲染」还是「轮询渲染」。
@@ -16,8 +14,9 @@ const subscribeToSessionStorage = () => () => {};
  * - 其余情况（刷新、分享链接、流式已结束、报告已完成）
  *   → ReportPoller 从 Supabase 读取真实数据。
  *
- * 办事要求通过 useSyncExternalStore 从 sessionStorage 读取：
- * 服务端快照为 null（与 SSR 渲染一致，无 hydration 警告），挂载后再切换视图。
+ * 办事要求通过 useEffect 从 sessionStorage 读取一次（挂载后）：
+ * 服务端与未挂载阶段统一渲染 ReportPoller，避免 SSR 水合不一致；
+ * 同时避免 useSyncExternalStore 因 getSnapshot 每次返回新对象引用导致的无限重渲染。
  */
 export function ReportEntry({
   documentId,
@@ -28,22 +27,27 @@ export function ReportEntry({
   initial: ReportSnapshot | null;
   wantsStreaming: boolean;
 }) {
-  const storedRequirements = useSyncExternalStore(
-    subscribeToSessionStorage,
-    () => loadRequirementsForStream(documentId),
-    () => null
-  );
+  const [sessionData, setSessionData] = useState<StoredRequirements | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setSessionData(loadRequirementsForStream(documentId));
+    setIsMounted(true);
+  }, [documentId]);
+
+  // 防止 SSR 水合不一致，未挂载前直接渲染 Poller
+  if (!isMounted) {
+    return <ReportPoller documentId={documentId} initial={initial} />;
+  }
 
   const useStreaming =
-    wantsStreaming &&
-    storedRequirements !== null &&
-    initial?.status === "pending";
+    wantsStreaming && sessionData !== null && initial?.status === "pending";
 
-  if (useStreaming && storedRequirements !== null) {
+  if (useStreaming && sessionData !== null) {
     return (
       <StreamingReport
         documentId={documentId}
-        sessionData={storedRequirements}
+        sessionData={sessionData}
         initial={initial}
       />
     );
