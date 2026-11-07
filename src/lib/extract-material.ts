@@ -39,19 +39,26 @@ export async function extractMaterialText(filePath: string): Promise<string> {
   const ext = dotIndex >= 0 ? filePath.slice(dotIndex + 1).toLowerCase() : "";
   const mimeType = blob.type;
 
-  // 1. 如果是 PDF，使用 unpdf 解析
-  if (ext === "pdf" || mimeType === "application/pdf") {
-    try {
-      // 动态导入，完美兼容 Serverless
-      const { extractText } = await import("unpdf");
-      const buffer = new Uint8Array(await blob.arrayBuffer());
-      const { text } = await extractText(buffer, { mergePages: true });
-      return text.trim();
-    } catch (error) {
-      console.error("[extract-material] PDF 解析失败:", error);
-      throw new Error("PDF解析失败，请检查文件格式或稍后重试");
+
+if (ext === "pdf" || mimeType === "application/pdf") {
+  try {
+    const { getDocument } = await import("pdfjs-serverless");
+    const buffer = new Uint8Array(await blob.arrayBuffer());
+    const doc = await getDocument({ data: buffer }).promise;
+    
+    let fullText = "";
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(" ");
+      fullText += pageText + "\n";
     }
+    return fullText.trim();
+  } catch (error) {
+    console.error("[extract-material] PDF 解析失败:", error);
+    throw new Error("PDF解析失败，请检查文件格式或稍后重试");
   }
+}
 
   // 2. 如果是纯文本文件，直接读取
   const textExtensions = ["txt", "md", "csv", "json", "log", "text"];
