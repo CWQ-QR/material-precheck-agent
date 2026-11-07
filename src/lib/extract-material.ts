@@ -1,6 +1,7 @@
 import { getSupabaseAdmin, SUPABASE_ADMIN_NOT_CONFIGURED_MESSAGE } from "./supabase-admin";
 import { MATERIALS_BUCKET } from "./materials";
 import { extractTextFromImage } from "./precheck-ai";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 
 // 根据 document_id 查询 Storage 文件路径
 export async function getDocumentFilePath(documentId: string): Promise<string> {
@@ -43,6 +44,8 @@ export async function extractMaterialText(filePath: string): Promise<string> {
 if (ext === "pdf" || mimeType === "application/pdf") {
   try {
     const { getDocument } = await import("pdfjs-serverless");
+    // 关键：强制使用 legacy 构建
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
     const buffer = new Uint8Array(await blob.arrayBuffer());
     const doc = await getDocument({ data: buffer }).promise;
     
