@@ -143,6 +143,7 @@ export function UploadForm() {
     let documentId: string | null = null;
 
     try {
+      setStatus("uploading");
       let extractedText = "";
       if (file && (file.type === "application/pdf" || file.name.endsWith(".pdf"))) {
         try {
@@ -153,7 +154,6 @@ export function UploadForm() {
         }
       }
       // 第一步：上传文件到 Storage 的 materials 桶
-      setStatus("uploading");
       const filePath = await uploadMaterial(file as File);
 
       // 第二步：documents 表登记，同时创建 pending 的 reports 记录
