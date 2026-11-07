@@ -9,6 +9,7 @@ const STORAGE_KEY = "precheck-requirements";
 export interface StoredRequirements {
   document_id: string;
   requirements: string;
+  extractedText?: string;
 }
 
 /** 保存本次上传对应的办事要求（每次上传覆盖写入） */

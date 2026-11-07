@@ -1,4 +1,6 @@
 "use client";
+import * as pdfjsLib from 'pdfjs-dist';
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 import {
   useEffect,
@@ -68,6 +70,17 @@ export function UploadForm() {
   const canSubmit =
     !!file && trimmedRequirements.length > 0 && !isProcessing;
 
+  async function extractTextFromPDF(file: File) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map((item: any) => item.str).join(' ') + '\n';
+    }
+    return text;
+  }
   const resetFileInput = () => {
     if (inputRef.current) {
       inputRef.current.value = "";
@@ -129,6 +142,15 @@ export function UploadForm() {
     let documentId: string | null = null;
 
     try {
+      let extractedText = "";
+      if (file && (file.type === "application/pdf" || file.name.endsWith(".pdf"))) {
+        try {
+          extractedText = await extractTextFromPDF(file);
+        } catch (error) {
+          console.error("前端解析 PDF 失败", error);
+          throw new Error("PDF解析失败，请更换文件格式");
+        }
+      }
       // 第一步：上传文件到 Storage 的 materials 桶
       setStatus("uploading");
       const filePath = await uploadMaterial(file as File);
@@ -151,6 +173,7 @@ export function UploadForm() {
       saveRequirementsForStream({
         document_id: documentId,
         requirements: trimmedRequirements,
+        extractedText: extractedText,
       });
       router.push(`/report/${documentId}?streaming=true`);
 

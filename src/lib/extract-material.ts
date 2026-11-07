@@ -1,7 +1,6 @@
 import { getSupabaseAdmin, SUPABASE_ADMIN_NOT_CONFIGURED_MESSAGE } from "./supabase-admin";
 import { MATERIALS_BUCKET } from "./materials";
 import { extractTextFromImage } from "./precheck-ai";
-import type { PDFDocumentProxy } from "pdfjs-dist";
 
 // 根据 document_id 查询 Storage 文件路径
 export async function getDocumentFilePath(documentId: string): Promise<string> {
@@ -41,27 +40,9 @@ export async function extractMaterialText(filePath: string): Promise<string> {
   const mimeType = blob.type;
 
 
-if (ext === "pdf" || mimeType === "application/pdf") {
-  try {
-    const { getDocument } = await import("pdfjs-serverless");
-    // 关键：强制使用 legacy 构建
-    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const buffer = new Uint8Array(await blob.arrayBuffer());
-    const doc = await getDocument({ data: buffer }).promise;
-    
-    let fullText = "";
-    for (let i = 1; i <= doc.numPages; i++) {
-      const page = await doc.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items.map((item: any) => item.str).join(" ");
-      fullText += pageText + "\n";
-    }
-    return fullText.trim();
-  } catch (error) {
-    console.error("[extract-material] PDF 解析失败:", error);
-    throw new Error("PDF解析失败，请检查文件格式或稍后重试");
+  if (ext === "pdf" || mimeType === "application/pdf") {
+    throw new Error("PDF 解析已移至前端，请刷新页面重新上传");
   }
-}
 
   // 2. 如果是纯文本文件，直接读取
   const textExtensions = ["txt", "md", "csv", "json", "log", "text"];
