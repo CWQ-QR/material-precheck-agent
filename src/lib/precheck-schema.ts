@@ -72,6 +72,7 @@ export type PrecheckPartialResult = z.infer<
 export const precheckRequestSchema = z.object({
   document_id: z.string().trim().min(1, "缺少 document_id"),
   requirements: z.string().trim().min(1, "请填写办事要求"),
+  extractedText: z.string().optional(),
 });
 
 export type PrecheckRequest = z.infer<typeof precheckRequestSchema>;

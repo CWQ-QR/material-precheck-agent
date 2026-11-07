@@ -25,7 +25,7 @@ export function saveRequirementsForStream(value: StoredRequirements): void {
 /** 读取指定文档的办事要求（SSR/隐私模式下返回 null） */
 export function loadRequirementsForStream(
   documentId: string
-): string | null {
+): StoredRequirements | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
@@ -34,7 +34,7 @@ export function loadRequirementsForStream(
     if (parsed?.document_id !== documentId || !parsed.requirements) {
       return null;
     }
-    return parsed.requirements;
+    return parsed as StoredRequirements;
   } catch {
     return null;
   }

@@ -43,7 +43,7 @@ export function ReportEntry({
     return (
       <StreamingReport
         documentId={documentId}
-        requirements={storedRequirements}
+        sessionData={storedRequirements}
         initial={initial}
       />
     );

@@ -77,13 +77,16 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const { document_id, requirements } = parsed.data;
+  const { document_id, requirements, extractedText } = parsed.data;
 
-  // a-b. 查出 file_path 并下载提取材料文本。此阶段失败直接落库 failed 并返回 500。
+  // a-b. 获取材料文本：优先使用前端已解析好的文本，未提供时再由服务端提取。
   let materialText: string;
   try {
-    const filePath = await getDocumentFilePath(document_id);
-    const fullText = await extractMaterialText(filePath);
+    let fullText = extractedText || "";
+    if (!fullText) {
+      const filePath = await getDocumentFilePath(document_id);
+      fullText = await extractMaterialText(filePath);
+    }
     if (!fullText) {
       throw new Error("未能从材料中提取到文本，请确认文件内容清晰可读");
     }

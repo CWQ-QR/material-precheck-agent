@@ -13,6 +13,7 @@ import {
   type PrecheckPartialResult,
   type PrecheckResult,
 } from "@/lib/precheck-schema";
+import type { StoredRequirements } from "@/lib/stream-session";
 import type { ReportSnapshot } from "@/lib/types";
 import { ReportPoller } from "./report-poller";
 import { ReportView } from "./report-view";
@@ -154,11 +155,11 @@ function StreamingIssueCard({
  */
 export function StreamingReport({
   documentId,
-  requirements,
+  sessionData,
   initial,
 }: {
   documentId: string;
-  requirements: string;
+  sessionData: StoredRequirements;
   initial: ReportSnapshot | null;
 }) {
   const [phase, setPhase] = useState<Phase>("streaming");
@@ -187,7 +188,11 @@ export function StreamingReport({
         const response = await fetch("/api/precheck", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ document_id: documentId, requirements }),
+          body: JSON.stringify({
+            document_id: documentId,
+            requirements: sessionData.requirements,
+            extractedText: sessionData.extractedText,
+          }),
         });
 
         if (!response.ok || !response.body) {
@@ -236,7 +241,7 @@ export function StreamingReport({
     };
 
     void run();
-  }, [documentId, requirements]);
+  }, [documentId, sessionData]);
 
   if (phase === "done" && finalResult && workflowDone) {
     // 流式结束（onFinish）后，彻底切断 partial 半成品渲染：

@@ -1,7 +1,4 @@
 "use client";
-import * as pdfjsLib from 'pdfjs-dist';
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.min.js';
-
 import {
   useEffect,
   useRef,
@@ -71,6 +68,10 @@ export function UploadForm() {
     !!file && trimmedRequirements.length > 0 && !isProcessing;
 
   async function extractTextFromPDF(file: File) {
+    // 动态导入：pdfjs-dist 体积大，且 SSR 时不应加载；
+    // 仅在用户实际触发解析时才在浏览器端加载。
+    const pdfjsLib = await import("pdfjs-dist");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "/js/pdf.worker.min.js";
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     let text = '';
